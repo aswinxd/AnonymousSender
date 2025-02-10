@@ -30,16 +30,16 @@ def connect_group(client, message: Message):
 
 # Show connected chats in PM
 @app.on_message(filters.command("chats") & filters.private)
-def show_chats(client, message: Message):
+async def show_chats(client, message: Message):
     user_id = message.from_user.id
     chats = list(chats_collection.find({"admin_id": user_id}))
 
     if not chats:
-        message.reply_text("No connected groups found!")
+        await message.reply_text("No connected groups found!")
         return
 
     buttons = [[InlineKeyboardButton(str(chat["chat_id"]), callback_data=f"chat_{chat['chat_id']}")] for chat in chats]
-    message.reply_text("Select a connected chat:", reply_markup=InlineKeyboardMarkup(buttons))
+    await message.reply_text("Select a connected chat:", reply_markup=InlineKeyboardMarkup(buttons))
 
 # Handle chat selection
 @app.on_callback_query(filters.regex("^chat_"))
