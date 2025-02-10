@@ -17,16 +17,16 @@ messages_collection = db["messages"]
 
 # Connect command (group only, admin only)
 @app.on_message(filters.command("connect") & filters.group)
-def connect_group(client, message: Message):
+async def connect_group(client, message: Message):
     admin_id = message.from_user.id
     chat_id = message.chat.id
 
     if chats_collection.find_one({"chat_id": chat_id}):
-        message.reply_text("This group is already connected!")
+        await message.reply_text("This group is already connected!")
         return
 
     chats_collection.insert_one({"chat_id": chat_id, "admin_id": admin_id})
-    message.reply_text("Group successfully connected!")
+    await message.reply_text("Group successfully connected!")
 
 # Show connected chats in PM
 @app.on_message(filters.command("chats") & filters.private)
@@ -43,24 +43,24 @@ async def show_chats(client, message: Message):
 
 # Handle chat selection
 @app.on_callback_query(filters.regex("^chat_"))
-def chat_options(client, query):
+async def chat_options(client, query):
     chat_id = query.data.split("_")[1]
     buttons = [
         [InlineKeyboardButton("Send an Anonymous Message", callback_data=f"send_{chat_id}")],
         [InlineKeyboardButton("Remove Chat", callback_data=f"remove_{chat_id}")]
     ]
-    query.message.edit_text("Choose an action:", reply_markup=InlineKeyboardMarkup(buttons))
+    await query.message.edit_text("Choose an action:", reply_markup=InlineKeyboardMarkup(buttons))
 
 # Remove chat
 @app.on_callback_query(filters.regex("^remove_"))
-def remove_chat(client, query):
+async def remove_chat(client, query):
     chat_id = query.data.split("_")[1]
     chats_collection.delete_one({"chat_id": int(chat_id)})
-    query.message.edit_text("Chat removed successfully!")
+    await query.message.edit_text("Chat removed successfully!")
 
 # Start anonymous message process
 @app.on_callback_query(filters.regex("^send_"))
-def start_anon_message(client, query):
+async def start_anon_message(client, query):
     chat_id = int(query.data.split("_")[1])
     messages_collection.delete_one({"user_id": query.from_user.id})
     messages_collection.insert_one({"user_id": query.from_user.id, "chat_id": chat_id, "image": None, "caption": None, "buttons": []})
@@ -72,7 +72,7 @@ def start_anon_message(client, query):
          InlineKeyboardButton("Preview", callback_data="preview")],
         [InlineKeyboardButton("Send", callback_data="send_final")]
     ]
-    query.message.edit_text("Editing anonymous message:", reply_markup=InlineKeyboardMarkup(buttons))
+    await query.message.edit_text("Editing anonymous message:", reply_markup=InlineKeyboardMarkup(buttons))
 
 # Add image
 @app.on_callback_query(filters.regex("^add_image"))
@@ -80,42 +80,42 @@ def ask_image(client, query):
     query.message.reply_text("Send the image now.")
     app.listen(query.message.chat.id, filters.photo, process_image)
 
-def process_image(client, message):
+async def process_image(client, message):
     user_id = message.from_user.id
     file_id = message.photo.file_id
     messages_collection.update_one({"user_id": user_id}, {"$set": {"image": file_id}})
-    message.reply_text("Image added successfully!")
+    await message.reply_text("Image added successfully!")
 
 # Add caption
 @app.on_callback_query(filters.regex("^add_caption"))
-def ask_caption(client, query):
-    query.message.reply_text("Send the caption now.")
+async def ask_caption(client, query):
+    await query.message.reply_text("Send the caption now.")
     app.listen(query.message.chat.id, filters.text, process_caption)
 
-def process_caption(client, message):
+async def process_caption(client, message):
     user_id = message.from_user.id
     caption = message.text
     messages_collection.update_one({"user_id": user_id}, {"$set": {"caption": caption}})
-    message.reply_text("Caption added successfully!")
+    await message.reply_text("Caption added successfully!")
 
 # Add button
 @app.on_callback_query(filters.regex("^add_button"))
-def ask_button(client, query):
-    query.message.reply_text("Send button in the format: Button Name - URL")
+async def ask_button(client, query):
+    await query.message.reply_text("Send button in the format: Button Name - URL")
     app.listen(query.message.chat.id, filters.text, process_button)
 
-def process_button(client, message):
+async def process_button(client, message):
     user_id = message.from_user.id
     try:
         name, url = message.text.split(" - ")
         messages_collection.update_one({"user_id": user_id}, {"$push": {"buttons": {"name": name, "url": url}}})
-        message.reply_text("Button added successfully!")
+        await message.reply_text("Button added successfully!")
     except ValueError:
-        message.reply_text("Invalid format! Use: Button Name - URL")
+        await message.reply_text("Invalid format! Use: Button Name - URL")
 
 # Preview message
 @app.on_callback_query(filters.regex("^preview"))
-def preview_message(client, query):
+async def preview_message(client, query):
     user_id = query.from_user.id
     msg_data = messages_collection.find_one({"user_id": user_id})
 
@@ -123,13 +123,13 @@ def preview_message(client, query):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
 
     if msg_data["image"]:  # Image exists
-        query.message.reply_photo(photo=msg_data["image"], caption=msg_data["caption"] or "", reply_markup=markup)
+        await query.message.reply_photo(photo=msg_data["image"], caption=msg_data["caption"] or "", reply_markup=markup)
     else:
-        query.message.reply_text(text=msg_data["caption"] or "No caption", reply_markup=markup)
+        await query.message.reply_text(text=msg_data["caption"] or "No caption", reply_markup=markup)
 
 # Send final message
 @app.on_callback_query(filters.regex("^send_final"))
-def send_final_message(client, query):
+async def send_final_message(client, query):
     user_id = query.from_user.id
     msg_data = messages_collection.find_one({"user_id": user_id})
 
@@ -138,11 +138,11 @@ def send_final_message(client, query):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
 
     if msg_data["image"]:  # Image exists
-        app.send_photo(chat_id, photo=msg_data["image"], caption=msg_data["caption"] or "", reply_markup=markup)
+        await app.send_photo(chat_id, photo=msg_data["image"], caption=msg_data["caption"] or "", reply_markup=markup)
     else:
-        app.send_message(chat_id, text=msg_data["caption"] or "No caption", reply_markup=markup)
+        await app.send_message(chat_id, text=msg_data["caption"] or "No caption", reply_markup=markup)
 
-    query.message.reply_text("Message sent successfully!")
+    await query.message.reply_text("Message sent successfully!")
     messages_collection.delete_one({"user_id": user_id})
 
 app.run()
