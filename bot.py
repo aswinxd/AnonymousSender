@@ -28,7 +28,6 @@ async def connect_group(client, message: Message):
     chats_collection.insert_one({"chat_id": chat_id, "admin_id": admin_id})
     await message.reply_text("Group successfully connected!")
 
-# Show connected chats in PM
 @app.on_message(filters.command("chats") & filters.private)
 async def show_chats(client, message: Message):
     user_id = message.from_user.id
@@ -41,7 +40,6 @@ async def show_chats(client, message: Message):
     buttons = [[InlineKeyboardButton(str(chat["chat_id"]), callback_data=f"chat_{chat['chat_id']}")] for chat in chats]
     await message.reply_text("Select a connected chat:", reply_markup=InlineKeyboardMarkup(buttons))
 
-# Handle chat selection
 @app.on_callback_query(filters.regex("^chat_"))
 async def chat_options(client, query):
     chat_id = query.data.split("_")[1]
@@ -51,7 +49,6 @@ async def chat_options(client, query):
     ]
     await query.message.edit_text("Choose an action:", reply_markup=InlineKeyboardMarkup(buttons))
 
-# Remove chat
 @app.on_callback_query(filters.regex("^remove_"))
 async def remove_chat(client, query):
     chat_id = query.data.split("_")[1]
@@ -78,7 +75,7 @@ async def start_anon_message(client, query):
 @app.on_callback_query(filters.regex("^add_image"))
 async def ask_image(client, query):
     await query.message.reply_text("Send the image now.")
-    app.listen(query.message.chat.id, filters.photo, process_image)
+    await app.listen(query.message.chat.id, filters.photo, process_image)
 
 async def process_image(client, message):
     user_id = message.from_user.id
@@ -90,7 +87,7 @@ async def process_image(client, message):
 @app.on_callback_query(filters.regex("^add_caption"))
 async def ask_caption(client, query):
     await query.message.reply_text("Send the caption now.")
-    app.listen(query.message.chat.id, filters.text, process_caption)
+    await app.listen(query.message.chat.id, filters.text, process_caption)
 
 async def process_caption(client, message):
     user_id = message.from_user.id
@@ -102,7 +99,7 @@ async def process_caption(client, message):
 @app.on_callback_query(filters.regex("^add_button"))
 async def ask_button(client, query):
     await query.message.reply_text("Send button in the format: Button Name - URL")
-    app.listen(query.message.chat.id, filters.text, process_button)
+    await app.listen(query.message.chat.id, filters.text, process_button)
 
 async def process_button(client, message):
     user_id = message.from_user.id
