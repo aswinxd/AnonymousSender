@@ -75,7 +75,7 @@ async def start_anon_message(client, query):
 @app.on_callback_query(filters.regex("^add_image"))
 async def ask_image(client, query):
     await query.message.reply_text("Send the image now.")
-    await app.listen(query.message.chat.id, filters.photo, process_image)
+    await app.listen(query.message.chat.id, lambda _, m: m.photo, process_image)
 
 async def process_image(client, message):
     user_id = message.from_user.id
