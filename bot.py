@@ -40,40 +40,27 @@ async def show_chats(client, message: Message):
     buttons = []
     for chat in chats:
         chat_id = chat["chat_id"]
-        chat_title = f"Unknown Chat ({chat_id})"  # Default title
-
         try:
             chat_info = await client.get_chat(chat_id)  # Fetch chat details
-            chat_title = chat_info.title  # Update with actual title if available
+            chat_title = chat_info.title  # Get chat name
         except Exception as e:
-            print(f"Error fetching chat info for {chat_id}: {e}")  # Debugging log
+            print(f"Error fetching chat info for {chat_id}: {e}")
+            chat_title = f"Unknown Chat ({chat_id})"
 
+        # Using chat title as the button name, but keeping chat ID in callback_data
         buttons.append([InlineKeyboardButton(chat_title, callback_data=f"chat_{chat_id}")])
 
     await message.reply_text("Select a connected chat:", reply_markup=InlineKeyboardMarkup(buttons))
 
 
-app.on_callback_query(filters.regex("^chat_"))
+@app.on_callback_query(filters.regex("^chat_"))
 async def chat_options(client, query):
-    chat_id_str = query.data.split("_")[1]
-
-    try:
-        chat_id = int(chat_id_str)  # Convert to integer safely
-        chat_info = await client.get_chat(chat_id)  # Fetch chat details
-        chat_title = chat_info.title  # Get actual chat name
-    except ValueError:
-        await query.answer("Invalid chat selection!", show_alert=True)
-        return
-    except Exception as e:
-        print(f"Error fetching chat info for {chat_id_str}: {e}")
-        chat_title = f"Unknown Chat ({chat_id_str})"
-
+    chat_id = int(query.data.split("_")[1])  # Convert chat_id from string to int
     buttons = [
         [InlineKeyboardButton("Send an Anonymous Message", callback_data=f"send_{chat_id}")],
         [InlineKeyboardButton("Remove Chat", callback_data=f"remove_{chat_id}")]
     ]
-
-    await query.message.edit_text(f"**{chat_title}**\nChoose an action:", reply_markup=InlineKeyboardMarkup(buttons))
+    await query.message.edit_text("Choose an action:", reply_markup=InlineKeyboardMarkup(buttons))
 
 
 @app.on_callback_query(filters.regex("^remove_"))
