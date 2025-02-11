@@ -108,15 +108,6 @@ async def ask_caption(client, query):
     await query.message.reply_text("Send the caption now.")
 
 
-@app.on_message(filters.text & filters.private)
-async def process_caption(client, message):
-    user_id = message.from_user.id
-    caption = message.text
-    
-    # Update caption in the database
-    messages_collection.update_one({"user_id": user_id}, {"$set": {"caption": caption}})
-    await message.reply_text("✅ Caption added successfully!")
-
 
 @app.on_callback_query(filters.regex("^add_button"))
 async def ask_button(client, query):
@@ -125,22 +116,6 @@ async def ask_button(client, query):
     await query.message.reply_text("Send the button in this format:\n\n`Button Name - URL`")
 
 
-
-@app.on_message(filters.text & filters.private)
-async def process_button(client, message):
-    user_id = message.from_user.id
-    try:
-        name, url = message.text.split(" - ", 1)  # Ensure correct splitting
-        messages_collection.update_one(
-            {"user_id": user_id},
-            {"$push": {"buttons": {"name": name.strip(), "url": url.strip()}}}
-        )
-        await message.reply_text(f"✅ Button '{name}' added successfully!")
-    except ValueError:
-        await message.reply_text("❌ Invalid format! Use: `Button Name - URL`")
-
-
-### **Preview Message**
 @app.on_callback_query(filters.regex("^preview"))
 async def preview_message(client, query):
     user_id = query.from_user.id
