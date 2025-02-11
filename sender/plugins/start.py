@@ -1,5 +1,5 @@
 import asyncio
-from strings.string import p start_command_instructions
+from strings.string import start_command_instructions
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sender import app
