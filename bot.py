@@ -53,21 +53,20 @@ async def show_chats(client, message: Message):
     await message.reply_text("Select a connected chat:", reply_markup=InlineKeyboardMarkup(buttons))
 
 
-@app.on_callback_query(filters.regex("^chat_"))
+app.on_callback_query(filters.regex("^chat_"))
 async def chat_options(client, query):
     chat_id_str = query.data.split("_")[1]
 
-    if not chat_id_str.isdigit():
+    try:
+        chat_id = int(chat_id_str)  # Convert to integer safely
+        chat_info = await client.get_chat(chat_id)  # Fetch chat details
+        chat_title = chat_info.title  # Get actual chat name
+    except ValueError:
         await query.answer("Invalid chat selection!", show_alert=True)
         return
-
-    chat_id = int(chat_id_str)  
-    try:
-        chat_info = await client.get_chat(chat_id)
-        chat_title = chat_info.title  
     except Exception as e:
-        print(f"Error fetching chat info for {chat_id}: {e}")
-        chat_title = f"Unknown Chat ({chat_id})"
+        print(f"Error fetching chat info for {chat_id_str}: {e}")
+        chat_title = f"Unknown Chat ({chat_id_str})"
 
     buttons = [
         [InlineKeyboardButton("Send an Anonymous Message", callback_data=f"send_{chat_id}")],
@@ -75,6 +74,7 @@ async def chat_options(client, query):
     ]
 
     await query.message.edit_text(f"**{chat_title}**\nChoose an action:", reply_markup=InlineKeyboardMarkup(buttons))
+
 
 @app.on_callback_query(filters.regex("^remove_"))
 async def remove_chat(client, query):
