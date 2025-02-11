@@ -61,7 +61,12 @@ user_state = {}
 ### Start message creation process
 @app.on_callback_query(filters.regex("^send_"))
 async def start_anon_message(client, query):
-    chat_id = int(query.data.split("_")[1])
+    data_parts = query.data.split("_")
+    if len(data_parts) < 2 or not data_parts[1].isdigit():
+        await query.answer("❌ Invalid request!", show_alert=True)
+        return
+
+    chat_id = int(data_parts[1])
     
     messages_collection.delete_one({"user_id": query.from_user.id})
     messages_collection.insert_one({
