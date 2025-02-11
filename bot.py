@@ -9,14 +9,13 @@ API_HASH = "1089a994258b8d77f06a2be5b1a01a31"
 BOT_TOKEN = "6520550784:AAHZPv8eOS2Unc91jIVYSH5PB0z8SO36lUY"
 MONGO_URI = "mongodb+srv://bot:bot@cluster0.8vepzds.mongodb.net/?retryWrites=true&w=majority"  # Replace with your MongoDB URI
 
-# Initialize bot and database
 app = Client("anon_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 mongo = MongoClient(MONGO_URI)
 db = mongo["anon_bot_db"]
 chats_collection = db["chats"]
 messages_collection = db["messages"]
 
-# Connect command (group only, admin only)
+
 @app.on_message(filters.command("connect") & filters.group)
 async def connect_group(client, message: Message):
     admin_id = message.from_user.id
@@ -38,7 +37,16 @@ async def show_chats(client, message: Message):
         await message.reply_text("No connected groups found!")
         return
 
-    buttons = [[InlineKeyboardButton(str(chat["chat_id"]), callback_data=f"chat_{chat['chat_id']}")] for chat in chats]
+    buttons = []
+    for chat in chats:
+        chat_id = chat["chat_id"]
+        try:
+            chat_info = await client.get_chat(chat_id) 
+        except Exception as e:
+            chat_title = f"Unknown Chat ({chat_id})" 
+
+        buttons.append([InlineKeyboardButton(chat_title, callback_data=f"chat_{chat_id}")])
+
     await message.reply_text("Select a connected chat:", reply_markup=InlineKeyboardMarkup(buttons))
 
 @app.on_callback_query(filters.regex("^chat_"))
@@ -61,12 +69,7 @@ user_state = {}
 ### Start message creation process
 @app.on_callback_query(filters.regex("^send_"))
 async def start_anon_message(client, query):
-    data_parts = query.data.split("_")
-    if len(data_parts) < 2 or not data_parts[1].isdigit():
-        await query.answer("❌ Invalid request!", show_alert=True)
-        return
-
-    chat_id = int(data_parts[1])
+    chat_id = int(query.data.split("_")[1])
     
     messages_collection.delete_one({"user_id": query.from_user.id})
     messages_collection.insert_one({
