@@ -62,131 +62,27 @@ user_state = {}
 @app.on_callback_query(filters.regex("^send_"))
 async def start_anon_message(client, query):
     chat_id = int(query.data.split("_")[1])
+    
+    # Ensure a clean slate for message creation
     messages_collection.delete_one({"user_id": query.from_user.id})
     messages_collection.insert_one({
-        "user_id": query.from_user.id,
-        "chat_id": chat_id,
-        "image": None,
-        "caption": None,
-        "buttons": [],
-        "saved_name": None
+        "user_id": query.from_user.id, 
+        "chat_id": chat_id, 
+        "image": None, 
+        "caption": None, 
+        "buttons": []
     })
-    
-    buttons = [
-        [InlineKeyboardButton("➕ Add Image", callback_data="add_image"),
-         InlineKeyboardButton("📝 Add Caption", callback_data="add_caption")],
-        [InlineKeyboardButton("🔗 Add Button", callback_data="add_button"),
-         InlineKeyboardButton("👀 Preview", callback_data="preview")],
-        [InlineKeyboardButton("💾 Save", callback_data="save_message"),
-         InlineKeyboardButton("📤 Send", callback_data="send_final")]
-    ]
-    await query.message.edit_text("Editing your anonymous message:", reply_markup=InlineKeyboardMarkup(buttons))
-
-### Save Message - Ask for Name
-@app.on_callback_query(filters.regex("^save_message$"))
-async def ask_save_name(client, query):
-    user_state[query.from_user.id] = "saving_message"
-    await query.message.reply_text("💾 Send a name for your saved message.")
-
-### Process Save Name
-@app.on_message(filters.text & filters.private)
-async def process_text_inputs(client, message):
-    user_id = message.from_user.id
-    if user_id in user_state:
-        action = user_state[user_id]
-        
-        if action == "saving_message":
-            messages_collection.update_one({"user_id": user_id}, {"$set": {"saved_name": message.text}})
-            await message.reply_text(f"✅ Message saved as **'{message.text}'**!")
-        
-        elif action == "adding_button":
-            if "|" in message.text:
-                name, url = message.text.split("|", 1)
-                messages_collection.update_one({"user_id": user_id}, {"$push": {"buttons": {"name": name.strip(), "url": url.strip()}}})
-                await message.reply_text("✅ Button added successfully!")
-            else:
-                await message.reply_text("⚠️ Incorrect format! Use:\n`Button Name | https://example.com`")
-
-        del user_state[user_id]  # Clear user state after processing
-
-### Manage Saved Messages
-@app.on_message(filters.command("saved") & filters.private)
-async def show_saved_messages(client, message):
-    user_id = message.from_user.id
-    saved_messages = list(messages_collection.find({"user_id": user_id, "saved_name": {"$ne": None}}))
-
-    if not saved_messages:
-        await message.reply_text("⚠️ No saved messages found!")
-        return
-
-    buttons = [[InlineKeyboardButton(msg["saved_name"], callback_data=f"view_saved_{msg['_id']}")] for msg in saved_messages]
-    await message.reply_text("📂 Select a saved message:", reply_markup=InlineKeyboardMarkup(buttons))
-
-### View Saved Message
-@app.on_callback_query(filters.regex("^view_saved_"))
-async def view_saved_message(client, query):
-    msg_id = query.data.split("_")[2]
-    msg_data = messages_collection.find_one({"_id": ObjectId(msg_id)})
 
     buttons = [
-        [InlineKeyboardButton("📤 Send", callback_data=f"send_saved_{msg_id}")],
-        [InlineKeyboardButton("⏳ Schedule", callback_data=f"schedule_saved_{msg_id}")]
+        [InlineKeyboardButton("Add Image", callback_data="add_image"),
+         InlineKeyboardButton("Add Caption", callback_data="add_caption")],
+        [InlineKeyboardButton("Add URL Button", callback_data="add_button"),
+         InlineKeyboardButton("Preview", callback_data="preview")],
+        [InlineKeyboardButton("Send", callback_data="send_final")]
     ]
-    await query.message.reply_text(f"📩 Saved message: **{msg_data['saved_name']}**", reply_markup=InlineKeyboardMarkup(buttons))
+    await query.message.edit_text("Editing anonymous message:", reply_markup=InlineKeyboardMarkup(buttons))
 
-### Send Saved Message
-@app.on_callback_query(filters.regex("^send_saved_"))
-async def send_saved_message(client, query):
-    msg_id = query.data.split("_")[2]
-    msg_data = messages_collection.find_one({"_id": ObjectId(msg_id)})
-    chat_id = msg_data["chat_id"]
 
-    buttons = [[InlineKeyboardButton(btn["name"], url=btn["url"])] for btn in msg_data["buttons"]]
-    markup = InlineKeyboardMarkup(buttons) if buttons else None
-
-    if msg_data["image"]:
-        await app.send_photo(chat_id, photo=msg_data["image"], caption=msg_data["caption"] or "", reply_markup=markup)
-    else:
-        await app.send_message(chat_id, text=msg_data["caption"] or "No caption", reply_markup=markup)
-
-    await query.message.reply_text("✅ Message sent successfully!")
-
-### Schedule Message
-@app.on_callback_query(filters.regex("^schedule_saved_"))
-async def ask_schedule_interval(client, query):
-    msg_id = query.data.split("_")[2]
-    user_state[query.from_user.id] = f"scheduling_{msg_id}"
-    await query.message.reply_text("⏳ Send the interval time in seconds.")
-
-### Process Schedule Time
-@app.on_message(filters.text & filters.private)
-async def process_schedule_time(client, message):
-    user_id = message.from_user.id
-    if user_id in user_state and user_state[user_id].startswith("scheduling_"):
-        msg_id = user_state[user_id].split("_")[1]
-        try:
-            interval = int(message.text)
-            await message.reply_text(f"✅ Scheduling message every {interval} seconds.")
-            asyncio.create_task(schedule_message(msg_id, interval))
-        except ValueError:
-            await message.reply_text("⚠️ Invalid input! Please enter a number.")
-        del user_state[user_id]
-
-### Schedule Sending Task
-async def schedule_message(msg_id, interval):
-    msg_data = messages_collection.find_one({"_id": ObjectId(msg_id)})
-    chat_id = msg_data["chat_id"]
-
-    while True:
-        buttons = [[InlineKeyboardButton(btn["name"], url=btn["url"])] for btn in msg_data["buttons"]]
-        markup = InlineKeyboardMarkup(buttons) if buttons else None
-
-        if msg_data["image"]:
-            await app.send_photo(chat_id, photo=msg_data["image"], caption=msg_data["caption"] or "", reply_markup=markup)
-        else:
-            await app.send_message(chat_id, text=msg_data["caption"] or "No caption", reply_markup=markup)
-
-        await asyncio.sleep(interval)
 ### **Image Handling**
 @app.on_callback_query(filters.regex("^add_image"))
 async def ask_image(client, query):
