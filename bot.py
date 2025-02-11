@@ -40,23 +40,41 @@ async def show_chats(client, message: Message):
     buttons = []
     for chat in chats:
         chat_id = chat["chat_id"]
+        chat_title = f"Unknown Chat ({chat_id})"  # Default title
+
         try:
-            chat_info = await client.get_chat(chat_id) 
+            chat_info = await client.get_chat(chat_id)  # Fetch chat details
+            chat_title = chat_info.title  # Update with actual title if available
         except Exception as e:
-            chat_title = f"Unknown Chat ({chat_id})" 
+            print(f"Error fetching chat info for {chat_id}: {e}")  # Debugging log
 
         buttons.append([InlineKeyboardButton(chat_title, callback_data=f"chat_{chat_id}")])
 
     await message.reply_text("Select a connected chat:", reply_markup=InlineKeyboardMarkup(buttons))
 
+
 @app.on_callback_query(filters.regex("^chat_"))
 async def chat_options(client, query):
-    chat_id = query.data.split("_")[1]
+    chat_id_str = query.data.split("_")[1]
+
+    if not chat_id_str.isdigit():
+        await query.answer("Invalid chat selection!", show_alert=True)
+        return
+
+    chat_id = int(chat_id_str)  
+    try:
+        chat_info = await client.get_chat(chat_id)
+        chat_title = chat_info.title  
+    except Exception as e:
+        print(f"Error fetching chat info for {chat_id}: {e}")
+        chat_title = f"Unknown Chat ({chat_id})"
+
     buttons = [
         [InlineKeyboardButton("Send an Anonymous Message", callback_data=f"send_{chat_id}")],
         [InlineKeyboardButton("Remove Chat", callback_data=f"remove_{chat_id}")]
     ]
-    await query.message.edit_text("Choose an action:", reply_markup=InlineKeyboardMarkup(buttons))
+
+    await query.message.edit_text(f"**{chat_title}**\nChoose an action:", reply_markup=InlineKeyboardMarkup(buttons))
 
 @app.on_callback_query(filters.regex("^remove_"))
 async def remove_chat(client, query):
