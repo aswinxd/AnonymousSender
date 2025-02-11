@@ -59,8 +59,16 @@ async def remove_chat(client, query):
 @app.on_callback_query(filters.regex("^send_"))
 async def start_anon_message(client, query):
     chat_id = int(query.data.split("_")[1])
+    
+    # Ensure a clean slate for message creation
     messages_collection.delete_one({"user_id": query.from_user.id})
-    messages_collection.insert_one({"user_id": query.from_user.id, "chat_id": chat_id, "image": None, "caption": None, "buttons": []})
+    messages_collection.insert_one({
+        "user_id": query.from_user.id, 
+        "chat_id": chat_id, 
+        "image": None, 
+        "caption": None, 
+        "buttons": []
+    })
 
     buttons = [
         [InlineKeyboardButton("Add Image", callback_data="add_image"),
@@ -71,75 +79,99 @@ async def start_anon_message(client, query):
     ]
     await query.message.edit_text("Editing anonymous message:", reply_markup=InlineKeyboardMarkup(buttons))
 
-# Add image
+
+### **Image Handling**
 @app.on_callback_query(filters.regex("^add_image"))
 async def ask_image(client, query):
-    await query.message.reply_text("Send the image now.")
-    await app.listen(query.message.chat.id, lambda _, m: m.photo, process_image)
+    await query.message.reply_text("Send the image now as a **photo**, not a file.")
 
+
+@app.on_message(filters.photo & filters.private)
 async def process_image(client, message):
     user_id = message.from_user.id
     file_id = message.photo.file_id
+    
+    # Update image in the database
     messages_collection.update_one({"user_id": user_id}, {"$set": {"image": file_id}})
-    await message.reply_text("Image added successfully!")
+    await message.reply_text("✅ Image added successfully!")
 
-# Add caption
+
+### **Caption Handling**
 @app.on_callback_query(filters.regex("^add_caption"))
 async def ask_caption(client, query):
     await query.message.reply_text("Send the caption now.")
-    await app.listen(query.message.chat.id, filters.text, process_caption)
 
+
+@app.on_message(filters.text & filters.private)
 async def process_caption(client, message):
     user_id = message.from_user.id
     caption = message.text
+    
+    # Update caption in the database
     messages_collection.update_one({"user_id": user_id}, {"$set": {"caption": caption}})
-    await message.reply_text("Caption added successfully!")
+    await message.reply_text("✅ Caption added successfully!")
 
-# Add button
+
+### **Button Handling**
 @app.on_callback_query(filters.regex("^add_button"))
 async def ask_button(client, query):
-    await query.message.reply_text("Send button in the format: Button Name - URL")
-    await app.listen(query.message.chat.id, filters.text, process_button)
+    await query.message.reply_text("Send the button in this format:\n\n`Button Name - URL`")
 
+
+@app.on_message(filters.text & filters.private)
 async def process_button(client, message):
     user_id = message.from_user.id
     try:
-        name, url = message.text.split(" - ")
-        messages_collection.update_one({"user_id": user_id}, {"$push": {"buttons": {"name": name, "url": url}}})
-        await message.reply_text("Button added successfully!")
+        name, url = message.text.split(" - ", 1)  # Ensure correct splitting
+        messages_collection.update_one(
+            {"user_id": user_id},
+            {"$push": {"buttons": {"name": name.strip(), "url": url.strip()}}}
+        )
+        await message.reply_text(f"✅ Button '{name}' added successfully!")
     except ValueError:
-        await message.reply_text("Invalid format! Use: Button Name - URL")
+        await message.reply_text("❌ Invalid format! Use: `Button Name - URL`")
 
-# Preview message
+
+### **Preview Message**
 @app.on_callback_query(filters.regex("^preview"))
 async def preview_message(client, query):
     user_id = query.from_user.id
     msg_data = messages_collection.find_one({"user_id": user_id})
 
+    if not msg_data:
+        await query.message.reply_text("❌ No message found. Please start again.")
+        return
+
     buttons = [[InlineKeyboardButton(btn["name"], url=btn["url"])] for btn in msg_data["buttons"]]
     markup = InlineKeyboardMarkup(buttons) if buttons else None
 
-    if msg_data["image"]:  # Image exists
+    if msg_data["image"]:  
         await query.message.reply_photo(photo=msg_data["image"], caption=msg_data["caption"] or "", reply_markup=markup)
     else:
         await query.message.reply_text(text=msg_data["caption"] or "No caption", reply_markup=markup)
 
-# Send final message
+
+### **Send Final Message Anonymously**
 @app.on_callback_query(filters.regex("^send_final"))
 async def send_final_message(client, query):
     user_id = query.from_user.id
     msg_data = messages_collection.find_one({"user_id": user_id})
 
+    if not msg_data:
+        await query.message.reply_text("❌ No message found. Please start again.")
+        return
+
     chat_id = msg_data["chat_id"]
     buttons = [[InlineKeyboardButton(btn["name"], url=btn["url"])] for btn in msg_data["buttons"]]
     markup = InlineKeyboardMarkup(buttons) if buttons else None
 
-    if msg_data["image"]:  # Image exists
+    if msg_data["image"]:
         await app.send_photo(chat_id, photo=msg_data["image"], caption=msg_data["caption"] or "", reply_markup=markup)
     else:
         await app.send_message(chat_id, text=msg_data["caption"] or "No caption", reply_markup=markup)
 
-    await query.message.reply_text("Message sent successfully!")
-    messages_collection.delete_one({"user_id": user_id})
+    await query.message.reply_text("✅ Message sent successfully!")
+    messages_collection.delete_one({"user_id": user_id})  # Cleanup after sending
+
 
 app.run()
