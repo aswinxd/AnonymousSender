@@ -4,7 +4,14 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
 from pymongo import MongoClient
 from sender import app
 from bson.objectid import ObjectId
-from config import messages_collection, chats_collection
+from pymongo import MongoClient
+
+client = MongoClient("mongodb+srv://bot:bot@cluster0.8vepzds.mongodb.net/?retryWrites=true&w=majority")  
+db = client["anon_bot_db"]
+
+
+messages_collection = db["messages"]
+chats_collection = db["chats"]
 
 
 
