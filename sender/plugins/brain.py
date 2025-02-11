@@ -138,8 +138,6 @@ async def preview_message(client, query):
     else:
         await query.message.reply_text(text=msg_data["caption"] or "No caption", reply_markup=markup)
 
-
-### **Send Final Message Anonymously**
 @app.on_callback_query(filters.regex("^send_final"))
 async def send_final_message(client, query):
     user_id = query.from_user.id
