@@ -5,7 +5,7 @@ from sender import app
 
 
 @app.on_message(filters.command("start") & filters.private)
-async def handle_start_command(message):
+async def handle_start_command(client, message):
     buttons = [
         [
             InlineKeyboardButton("add to group", url="https://t.me/MIssALeenA_BOT?startgroup=true"),
